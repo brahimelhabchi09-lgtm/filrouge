@@ -1,0 +1,86 @@
+@startuml
+
+    abstract class User {
+        - first_name : string
+        - last_name : string
+        - email : string
+        - password : string
+        - created_at : Date
+    }
+
+    class Student {
+        - role : string
+    }
+
+    class Bde {
+        - role : string
+    }
+
+    class Admin {
+        - role : string
+    }
+    class Teacher {
+        - role : string
+    }
+
+
+    class Category {
+
+        - Name : string
+        - Description : Date
+        - created_at : Date
+    }
+
+
+    class Report {
+
+        - body : string
+        - created_at : Date
+    }
+
+    class GenerReport {
+        - created_at : Date
+    }
+
+    class MeetingRequest {
+        - created_at : Date
+    }
+    class Meeting {
+        - created_at : Date
+        - date-meet : Date
+    }
+    class RejectTeacherReason {
+        - message
+    }
+    class RejectBdeReason {
+        - message
+    }
+    class RejectRequestMeetingReason {
+        - message 
+    }
+
+    User <|--- Student
+    User <|--- Admin
+    User <|--- Teacher
+    User <|--- Bde
+
+
+    Student "1" -- "0..*" Report : make > 
+    Admin "0..*" -- "1" Meeting :  aprove >
+    Category "1" -- "0..*" Report : has >
+    Report "0..*" -- "1" GenerReport : belongs to >
+    Meeting "1" -- "*" MeetingRequest : has >
+    Bde "1" -- "0..*" MeetingRequest : reserve >
+    MeetingRequest "1" -- "1" GenerReport : has >
+    Teacher "1" -- "*" RejectTeacherReason : if report reject >
+    Bde "1" -- "*" RejectBdeReason : if report reject >
+    Admin "1" -- "*" RejectRequestMeetingReason : if request meeting reject >
+    RejectBdeReason "1" -- "1" Report : explain to >
+    RejectTeacherReason "1" -- "1" Report : explain to >
+    RejectRequestMeetingReason "1" -- "1" Report : explain to >
+
+
+
+    
+
+@enduml
