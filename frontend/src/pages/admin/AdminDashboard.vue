@@ -201,33 +201,27 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useAdminStore } from '../../stores/admin';
-import DashboardLayout from '../../components/layout/DashboardLayout.vue';
 import ReportCard from '../../components/ReportCard.vue';
 import RefusalModal from '../../components/RefusalModal.vue';
 import Pagination from '../../components/Pagination.vue';
 import { Users, FileText, Video, Clock, Edit2, CalendarOff, Calendar, UserPlus } from 'lucide-vue-next';
 
 const adminStore = useAdminStore();
+const { users, reports, meetings, requestMeetings, userMeta, reportsMeta, requestMeta } = storeToRefs(adminStore);
 
-const users = ref([]);
-const requestMeetings = ref([]);
-const meetings = ref([]);
-const reports = ref([]);
+const userPagination = computed(() => ({ currentPage: userMeta.value.current_page, perPage: userMeta.value.per_page, total: userMeta.value.total }));
+const reportsPagination = computed(() => ({ currentPage: reportsMeta.value.current_page, perPage: reportsMeta.value.per_page, total: reportsMeta.value.total }));
+const requestPagination = computed(() => ({ currentPage: requestMeta.value.current_page, perPage: requestMeta.value.per_page, total: requestMeta.value.total }));
+
 const loading = ref(false);
 const reportsLoading = ref(false);
 const showRefusalModal = ref(false);
 const showScheduleModal = ref(false);
 const submitting = ref(false);
 const selectedRequest = ref(null);
-
-let requestId = 0;
-
-const userPagination = ref({ currentPage: 1, perPage: 10, total: 0 });
-const requestPagination = ref({ currentPage: 1, perPage: 10, total: 0 });
-const reportsPagination = ref({ currentPage: 1, perPage: 10, total: 0 });
-
 const meetingForm = reactive({ title: '', date: '', link: '' });
 
 const minDate = computed(() => {
@@ -235,58 +229,30 @@ const minDate = computed(() => {
   return d.toISOString().slice(0, 16);
 });
 
-onMounted(async () => { await fetchData(); });
-onUnmounted(() => { requestId++; });
-
-const fetchData = async () => {
-  const cid = ++requestId;
+onMounted(async () => {
   loading.value = true;
   try {
-    await Promise.allSettled([fetchUsers(), fetchRequestMeetings(), fetchMeetings(), fetchReports()]);
-    if (cid !== requestId) return;
-  } catch (e) { console.error(e); }
-  finally { if (cid === requestId) loading.value = false; }
-};
+    await Promise.allSettled([
+      adminStore.fetchUsers(),
+      adminStore.fetchRequestMeetings(),
+      adminStore.fetchMeetings(),
+      fetchReports(),
+    ]);
+  } finally {
+    loading.value = false;
+  }
+});
 
-const fetchUsers = async (page = 1) => {
-  const cid = requestId;
-  try {
-    const res = await adminStore.fetchUsers(page);
-    if (cid !== requestId) return;
-    users.value = res.users || [];
-    userPagination.value = { currentPage: res.meta?.current_page || 1, perPage: res.meta?.per_page || 10, total: res.meta?.total || 0 };
-  } catch (e) { if (cid === requestId) users.value = []; }
-};
-
-const fetchRequestMeetings = async (page = 1) => {
-  const cid = requestId;
-  try {
-    const res = await adminStore.fetchRequestMeetings(page);
-    if (cid !== requestId) return;
-    requestMeetings.value = res.data || [];
-    requestPagination.value = { currentPage: res.meta?.current_page || 1, perPage: res.meta?.per_page || 10, total: res.meta?.total || 0 };
-  } catch (e) { console.error(e); }
-};
-
-const fetchMeetings = async () => {
-  const cid = requestId;
-  try {
-    const res = await adminStore.fetchMeetings();
-    if (cid !== requestId) return;
-    meetings.value = res.data || [];
-  } catch (e) { console.error(e); }
-};
+const fetchUsers = (page = 1) => adminStore.fetchUsers(page);
+const fetchRequestMeetings = (page = 1) => adminStore.fetchRequestMeetings(page);
+const fetchMeetings = () => adminStore.fetchMeetings();
 
 const fetchReports = async (page = 1) => {
-  const cid = requestId;
   reportsLoading.value = true;
   try {
-    const res = await adminStore.fetchReports(page);
-    if (cid !== requestId) return;
-    reports.value = res.data || [];
-    reportsPagination.value = { currentPage: res.meta?.current_page || 1, perPage: res.meta?.per_page || 10, total: res.meta?.total || 0 };
+    await adminStore.fetchReports(page);
   } catch (e) { console.error(e); }
-  finally { if (cid === requestId) reportsLoading.value = false; }
+  finally { reportsLoading.value = false; }
 };
 
 const formatStatus = (status) => ({ pending: 'Pending', resolved: 'Resolved', rejected: 'Rejected', escalated: 'Escalated' }[status?.toLowerCase()] || status);
@@ -304,8 +270,11 @@ const openScheduleModal = (req) => {
 
 const handleRefusal = async (reason) => {
   if (!selectedRequest.value) return;
-  try { await adminStore.rejectRequestMeeting(selectedRequest.value.id, reason); showRefusalModal.value = false; await fetchRequestMeetings(); }
-  catch (e) { console.error(e); }
+  try {
+    await adminStore.rejectRequestMeeting(selectedRequest.value.id, reason);
+    showRefusalModal.value = false;
+    await adminStore.fetchRequestMeetings();
+  } catch (e) { console.error(e); }
 };
 
 const submitMeeting = async () => {
@@ -315,8 +284,8 @@ const submitMeeting = async () => {
     await adminStore.createMeeting({ request_meeting_id: selectedRequest.value.id, title: meetingForm.title, date: meetingForm.date, link: meetingForm.link.trim() || undefined });
     showScheduleModal.value = false;
     meetingForm.title = ''; meetingForm.date = ''; meetingForm.link = '';
-    await fetchRequestMeetings(); await fetchMeetings();
-  } catch (e) { console.error(e); alert(e.response?.data?.message || 'Failed to create meeting'); }
+    await Promise.all([adminStore.fetchRequestMeetings(), adminStore.fetchMeetings()]);
+  } catch (e) { alert(e.response?.data?.message || 'Failed to create meeting'); }
   finally { submitting.value = false; }
 };
 </script>

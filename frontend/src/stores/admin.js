@@ -7,6 +7,10 @@ export const useAdminStore = defineStore('admin', {
     meetings: [],
     requestMeetings: [],
     categories: [],
+    reports: [],
+    userMeta: { current_page: 1, per_page: 10, total: 0, last_page: 1 },
+    reportsMeta: { current_page: 1, per_page: 10, total: 0, last_page: 1 },
+    requestMeta: { current_page: 1, per_page: 10, total: 0, last_page: 1 },
     loading: false,
     error: null,
   }),
@@ -20,6 +24,7 @@ export const useAdminStore = defineStore('admin', {
       try {
         const response = await api.get(`/admin/dashboard?page=${page}`);
         this.users = response.data.users || [];
+        this.userMeta = response.data.meta || this.userMeta;
         return response.data;
       } catch (error) {
         this.error = error.message;
@@ -34,6 +39,8 @@ export const useAdminStore = defineStore('admin', {
       this.error = null;
       try {
         const response = await api.get(`/admin/reports?page=${page}`);
+        this.reports = response.data.data || [];
+        this.reportsMeta = response.data.meta || this.reportsMeta;
         return response.data;
       } catch (error) {
         this.error = error.message;
@@ -64,6 +71,7 @@ export const useAdminStore = defineStore('admin', {
       try {
         const response = await api.get(`/admin/request-meetings?page=${page}`);
         this.requestMeetings = response.data.data || [];
+        this.requestMeta = response.data.meta || this.requestMeta;
         return response.data;
       } catch (error) {
         this.error = error.message;
