@@ -14,7 +14,8 @@ class GeneratedReport extends Model
         'message',
         'priority',
         'status',
-        'reports_count'
+        'reports_count',
+        'bde_reason',
     ];
 
     public function bde(): BelongsTo

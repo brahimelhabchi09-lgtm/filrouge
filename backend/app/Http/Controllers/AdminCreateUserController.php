@@ -3,18 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Infrastructure\Persistence\Eloquent\Model\User;
-use App\Infrastructure\Persistence\Eloquent\Model\RequestMeeting;
-use App\Infrastructure\Persistence\Eloquent\Model\Meeting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class AdminCreateUserController extends Controller
 {
-    private function getUserId(Request $request)
-    {
-        return $request->header('X-User-Id');
-    }
-
     public function store(Request $request)
     {
         $validated = $request->validate([

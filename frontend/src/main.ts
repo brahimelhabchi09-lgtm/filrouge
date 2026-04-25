@@ -8,17 +8,17 @@ import router from './router'
 const app = createApp(App)
 
 Object.keys(LucideIcons).forEach((key) => {
-  if (key.startsWith('Lucide')) {
-    const iconName = key.replace('Lucide', '')
-    app.component(iconName, (LucideIcons as any)[key])
+  const icon = (LucideIcons as any)[key]
+  if (icon && typeof icon === 'object' && icon.render) {
+    app.component(key, icon)
   }
 })
 
 app.directive('lucide', {
   mounted(el, binding) {
     const iconName = binding.value
-    if (iconName && (LucideIcons as any)[iconName]) {
-      const icon = (LucideIcons as any)[iconName]
+    const icon = (LucideIcons as any)[iconName]
+    if (icon) {
       el.innerHTML = ''
       el.appendChild(icon.render())
     }

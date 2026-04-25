@@ -25,7 +25,16 @@ const routes = [
     children: [
       {
         path: '',
-        redirect: '/student/dashboard'
+        redirect: () => {
+          const auth = useAuthStore();
+          const roleRoutes: Record<string, string> = {
+            ADMIN: '/admin/dashboard',
+            BDE: '/bde/dashboard',
+            TEACHER: '/teacher/dashboard',
+            STUDENT: '/student/dashboard',
+          };
+          return roleRoutes[auth.userRole] || '/login';
+        },
       },
       {
         path: 'admin/dashboard',

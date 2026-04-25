@@ -3,13 +3,12 @@ import api from '../services/api';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: localStorage.getItem('auth_token') || '',
     user: JSON.parse(localStorage.getItem('auth_user') || 'null'),
     loading: false,
     error: null,
   }),
   getters: {
-    isAuthenticated: (state) => Boolean(state.token && state.user),
+    isAuthenticated: (state) => Boolean(state.user),
     isAdmin: (state) => state.user?.role?.toUpperCase() === 'ADMIN',
     isBDE: (state) => state.user?.role?.toUpperCase() === 'BDE',
     isTeacher: (state) => state.user?.role?.toUpperCase() === 'TEACHER',
@@ -18,19 +17,14 @@ export const useAuthStore = defineStore('auth', {
   },
   actions: {
     init() {
-      this.token = localStorage.getItem('auth_token') || '';
       this.user = JSON.parse(localStorage.getItem('auth_user') || 'null');
     },
-    setAuth({ token, user }) {
-      this.token = token || '';
+    setAuth({ user }) {
       this.user = user || null;
-      localStorage.setItem('auth_token', this.token);
       localStorage.setItem('auth_user', JSON.stringify(this.user));
     },
     clearAuth() {
-      this.token = '';
       this.user = null;
-      localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
     },
     async login(email, password) {
@@ -63,10 +57,7 @@ export const useAuthStore = defineStore('auth', {
           throw new Error(data.message || `Login failed with status ${response.status}`);
         }
 
-        this.setAuth({
-          token: 'session_' + Date.now(),
-          user: data.user,
-        });
+        this.setAuth({ user: data.user });
 
         return data;
       } catch (error) {
@@ -92,7 +83,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async fetchUser() {
-      if (!this.token) return null;
+      if (!this.user) return null;
       
       try {
         const response = await api.get('/student/dashboard');

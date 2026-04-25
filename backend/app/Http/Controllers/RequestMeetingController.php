@@ -4,34 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Infrastructure\Persistence\Eloquent\Model\GeneratedReport;
 use App\Infrastructure\Persistence\Eloquent\Model\RequestMeeting;
-use App\Infrastructure\Persistence\Eloquent\Model\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class RequestMeetingController extends Controller
 {
-    private function getUserId(Request $request)
-    {
-        return $request->header('X-User-Id');
-    }
-
-    private function getUser(Request $request)
-    {
-        $userId = $this->getUserId($request);
-        if ($userId) {
-            return User::find($userId);
-        }
-        return Auth::user();
-    }
-
     public function index(Request $request)
     {
-        $user = $this->getUser($request);
-        
+        $user = Auth::user();
+
         if (!$user) {
             return response()->json(['message' => 'User not found'], 401);
         }
-        
+
         $role = strtoupper((string) $user->role);
 
         $query = RequestMeeting::query()
@@ -68,8 +53,8 @@ class RequestMeetingController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        $userId = $this->getUserId($request);
-        
+        $userId = Auth::id();
+
         if (!$userId) {
             return response()->json(['message' => 'User not authenticated'], 401);
         }

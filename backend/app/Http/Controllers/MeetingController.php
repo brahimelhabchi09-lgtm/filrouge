@@ -8,19 +8,15 @@ use App\Infrastructure\Persistence\Eloquent\Model\RequestMeeting;
 use App\Mail\MeetingScheduledMail;
 use App\Services\OpenAIPdfReportService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class MeetingController extends Controller
 {
-    private function getUserId(Request $request)
-    {
-        return $request->header('X-User-Id');
-    }
-
     public function index(Request $request)
     {
-        $meetings = Meeting::with(['admin', 'requestMeeting.requestMeeting.bde'])
+        $meetings = Meeting::with(['admin', 'requestMeeting.bde', 'requestMeeting.generatedReport'])
             ->orderByDesc('date')
             ->paginate(20);
 
@@ -44,7 +40,7 @@ class MeetingController extends Controller
             'link' => 'nullable|string|max:500',
         ]);
 
-        $userId = $this->getUserId($request);
+        $userId = Auth::id();
 
         $requestMeeting = RequestMeeting::with(['bde', 'generatedReport.reports.student', 'generatedReport.reports.category'])
             ->findOrFail($validated['request_meeting_id']);
@@ -132,7 +128,7 @@ class MeetingController extends Controller
 
     public function show(Request $request, int $id)
     {
-        $meeting = Meeting::with(['admin', 'requestMeeting.requestMeeting.bde', 'requestMeeting.generatedReport'])
+        $meeting = Meeting::with(['admin', 'requestMeeting.bde', 'requestMeeting.generatedReport'])
             ->findOrFail($id);
 
         return response()->json([
