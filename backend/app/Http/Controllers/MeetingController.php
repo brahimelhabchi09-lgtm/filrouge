@@ -98,13 +98,10 @@ class MeetingController extends Controller
 
     private function generateGoogleMeetLink(): string
     {
-        // Generate a link with the format: meet.google.com/xxx-xxxx-xxx
-        $chars = 'abcdefghijklmnopqrstuvwxyz';
-        $p1 = substr(str_shuffle($chars), 0, 3);
-        $p2 = substr(str_shuffle($chars), 0, 4);
-        $p3 = substr(str_shuffle($chars), 0, 3);
-        
-        return "https://meet.google.com/{$p1}-{$p2}-{$p3}";
+        // Jitsi Meet: rooms are created on-demand — no API key needed
+        // Format: https://meet.jit.si/YouPorts-{random}
+        $token = 'YouPorts-' . strtoupper(bin2hex(random_bytes(5)));
+        return "https://meet.jit.si/{$token}";
     }
 
     private function sendMeetingEmail(Meeting $meeting, RequestMeeting $requestMeeting): void
