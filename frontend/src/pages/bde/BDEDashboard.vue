@@ -156,16 +156,16 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useBDEReportsStore } from '../../stores/bdeReports';
 import api from '../../services/api';
-import DashboardLayout from '../../components/layout/DashboardLayout.vue';
 import ReportCard from '../../components/ReportCard.vue';
 import RefusalModal from '../../components/RefusalModal.vue';
 import { Calendar, Video, FileText, CalendarPlus, XCircle, Inbox, X, Check, Clock, Send } from 'lucide-vue-next';
 
 const bdeStore = useBDEReportsStore();
+const { reports } = storeToRefs(bdeStore);
 
-const reports = ref([]);
 const meetings = ref([]);
 const loading = ref(false);
 const error = ref(null);
@@ -174,11 +174,7 @@ const showMeetingModal = ref(false);
 const selectedReport = ref(null);
 const submitting = ref(false);
 
-const meetingForm = reactive({
-  meeting_date: '',
-  notes: '',
-  meeting_link: ''
-});
+const meetingForm = reactive({ meeting_date: '', notes: '', meeting_link: '' });
 
 const minDate = computed(() => {
   const t = new Date(); t.setDate(t.getDate() + 1);
@@ -189,11 +185,8 @@ onMounted(async () => {
   loading.value = true;
   error.value = null;
   try {
-    await Promise.all([bdeStore.fetchReports(), bdeStore.fetchRequestMeetings()]);
-    reports.value = bdeStore.reports;
-    await fetchMeetings();
+    await Promise.all([bdeStore.fetchReports(), fetchMeetings()]);
   } catch (err) {
-    console.error('Error fetching data:', err);
     error.value = err.message || 'Failed to load data';
   } finally {
     loading.value = false;
@@ -203,10 +196,8 @@ onMounted(async () => {
 const fetchReports = async (page = 1) => {
   loading.value = true;
   try {
-    const data = await bdeStore.fetchReports(page);
-    reports.value = data.data || [];
+    await bdeStore.fetchReports(page);
   } catch (err) {
-    console.error('Error fetching reports:', err);
     error.value = err.message;
   } finally {
     loading.value = false;
@@ -219,22 +210,15 @@ const fetchMeetings = async () => {
     const d = res.data?.data || [];
     meetings.value = d
       .filter(rm => rm.status === 'approved' && rm.meeting)
-      .map(rm => ({
-        id: rm.meeting.id,
-        title: rm.meeting.title,
-        date: rm.meeting.date,
-        link: rm.meeting.link,
-        pdf_path: rm.meeting.pdf_path
-      }));
+      .map(rm => ({ id: rm.meeting.id, title: rm.meeting.title, date: rm.meeting.date, link: rm.meeting.link, pdf_path: rm.meeting.pdf_path }));
   } catch (err) {
     console.error('Error fetching meetings:', err);
   }
 };
 
-const getCategory = (report) => (report.reports && report.reports.length > 0) ? report.reports[0].category?.name || 'General' : 'General';
-const hasMeetingRequest = (report) => report.request_meeting && (report.request_meeting.status === 'pending' || report.request_meeting.status === 'approved');
-const getMeetingStatus = (report) => report.request_meeting ? report.request_meeting.status : null;
-
+const getCategory = (report) => (report.reports?.length > 0) ? report.reports[0].category?.name || 'General' : 'General';
+const hasMeetingRequest = (report) => report.request_meeting && ['pending', 'approved'].includes(report.request_meeting.status);
+const getMeetingStatus = (report) => report.request_meeting?.status || null;
 const formatStatus = (s) => ({ pending: 'Pending', approved: 'Approved', rejected: 'Rejected', escalated: 'Escalated' }[s?.toLowerCase()] || s);
 const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 const formatDateTime = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -254,7 +238,8 @@ const submitMeetingRequest = async () => {
       meeting_date: meetingForm.meeting_date, notes: meetingForm.notes, meeting_link: meetingForm.meeting_link || undefined
     });
     showMeetingModal.value = false;
-    await fetchReports();
+    await bdeStore.fetchReports();
+    await fetchMeetings();
   } catch (err) {
     error.value = err.response?.data?.message || err.message || 'Failed to submit request';
   } finally { submitting.value = false; }
@@ -266,7 +251,7 @@ const handleRefusal = async (reason) => {
   try {
     await bdeStore.denyReport(selectedReport.value.id, reason);
     showRefusalModal.value = false;
-    await fetchReports();
+    await bdeStore.fetchReports();
   } catch (err) {
     error.value = err.response?.data?.message || err.message || 'Failed to refuse report';
   } finally { submitting.value = false; }

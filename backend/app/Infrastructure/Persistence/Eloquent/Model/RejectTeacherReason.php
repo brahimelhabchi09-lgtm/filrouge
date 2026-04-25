@@ -29,9 +29,8 @@ class RejectTeacherReason extends Model
         return $this->belongsTo(User::class, 'teacher_id');
     }
 
-    
-    // public function generatedReport(): BelongsTo
-    // {
-    //     return $this->belongsTo(GeneratedReport::class, 'generated_report_id');
-    // }
+    public function generatedReport(): BelongsTo
+    {
+        return $this->belongsTo(GeneratedReport::class, 'generated_report_id');
+    }
 }

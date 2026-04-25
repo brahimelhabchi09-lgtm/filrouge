@@ -27,7 +27,7 @@ const routes = [
         path: '',
         redirect: () => {
           const auth = useAuthStore();
-          const roleRoutes: Record<string, string> = {
+          const roleRoutes = {
             ADMIN: '/admin/dashboard',
             BDE: '/bde/dashboard',
             TEACHER: '/teacher/dashboard',

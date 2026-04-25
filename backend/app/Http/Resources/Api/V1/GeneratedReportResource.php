@@ -16,11 +16,17 @@ class GeneratedReportResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'message' => $this->message,
+            'priority' => $this->priority,
+            'status' => $this->status,
+            'reports_count' => $this->reports_count,
+            'bde_reason' => $this->bde_reason,
             'created_at' => $this->created_at?->toISOString(),
             'reports' => $this->whenLoaded('reports', function () {
                 return \App\Http\Resources\Api\V1\ReportResource::collection($this->reports);
             }),
         ];
+        
     }
 }
 

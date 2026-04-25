@@ -1,7 +1,7 @@
 <template>
     <div class="form-container">
       <div class="header-back">
-        <router-link :to="{ name: 'dashboard' }" class="back-link">
+        <router-link :to="{ name: 'student-dashboard' }" class="back-link">
           <ArrowLeft :size="16" />
           <span>Back to Dashboard</span>
         </router-link>
@@ -61,7 +61,7 @@
         </div>
 
         <div class="form-actions">
-          <router-link :to="{ name: 'dashboard' }" class="btn btn-ghost">Cancel</router-link>
+          <router-link :to="{ name: 'student-dashboard' }" class="btn btn-ghost">Cancel</router-link>
           <button type="submit" class="btn btn-primary" :disabled="loading">
             <span v-if="loading" class="spinner-sm"></span>
             <template v-else>
@@ -133,7 +133,7 @@ const handleSubmit = async () => {
       category_id: form.category_id,
       description: form.description,
     });
-    router.push({ name: 'dashboard' });
+    router.push({ name: 'student-dashboard' });
   } catch (error) {
     console.error('Error creating report:', error);
     errors.general = error.message || 'Failed to create report.';

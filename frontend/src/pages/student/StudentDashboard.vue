@@ -87,16 +87,22 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useReportsStore } from '../../stores/reports';
-import DashboardLayout from '../../components/layout/DashboardLayout.vue';
 import ReportCard from '../../components/ReportCard.vue';
 import { FileText, Clock, CheckCircle, XCircle, Inbox, PlusCircle } from 'lucide-vue-next';
 
 const reportsStore = useReportsStore();
+const { reports, pagination } = storeToRefs(reportsStore);
 
-const reports = ref([]);
-const stats = reactive({ total: 0, pending: 0, resolved: 0, rejected: 0 });
+const stats = computed(() => ({
+  total: pagination.value.total,
+  pending: reports.value.filter(r => r.status === 'pending').length,
+  resolved: reports.value.filter(r => r.status === 'resolved').length,
+  rejected: reports.value.filter(r => r.status === 'rejected' || r.status === 'refused').length,
+}));
+
 const loading = ref(false);
 const activeFilter = ref('all');
 
@@ -121,11 +127,6 @@ onMounted(async () => {
   loading.value = true;
   try {
     await reportsStore.fetchMyReports();
-    reports.value = reportsStore.reports;
-    stats.total = reportsStore.pagination.total;
-    stats.pending = reports.value.filter(r => r.status === 'pending').length;
-    stats.resolved = reports.value.filter(r => r.status === 'resolved').length;
-    stats.rejected = reports.value.filter(r => r.status === 'rejected' || r.status === 'refused').length;
   } catch (error) {
     console.error('Error fetching reports:', error);
   } finally {

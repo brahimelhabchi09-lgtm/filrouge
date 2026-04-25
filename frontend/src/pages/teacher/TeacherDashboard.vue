@@ -160,56 +160,36 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useTeacherStore } from '../../stores/teacher';
-import DashboardLayout from '../../components/layout/DashboardLayout.vue';
 import ReportCard from '../../components/ReportCard.vue';
 import RefusalModal from '../../components/RefusalModal.vue';
 import Pagination from '../../components/Pagination.vue';
 import { Users, Clock, XCircle, CheckCircle2, Calendar } from 'lucide-vue-next';
 
 const teacherStore = useTeacherStore();
+const { reports, rejectedReasons, users, pagination: reportsPagination } = storeToRefs(teacherStore);
 
-const reports = ref([]);
-const rejectedReasons = ref([]);
-const users = ref([]);
 const loading = ref(false);
 const reportsLoading = ref(false);
 const showRefusalModal = ref(false);
 const selectedReport = ref(null);
-const reportsPagination = ref({ currentPage: 1, perPage: 10, total: 0 });
 
 onMounted(async () => {
-  await fetchData();
-});
-
-const fetchData = async () => {
   loading.value = true;
   try {
-    const [dashboardData, usersData] = await Promise.all([
-      teacherStore.fetchDashboard(),
-      teacherStore.fetchUsers(),
-      fetchReports()
-    ]);
-    reports.value = dashboardData.pendingReports || [];
-    rejectedReasons.value = dashboardData.rejectedReasons || [];
-    users.value = usersData || [];
+    await Promise.all([teacherStore.fetchDashboard(), teacherStore.fetchUsers()]);
   } catch (error) {
     console.error('Error fetching data:', error);
   } finally {
     loading.value = false;
   }
-};
+});
 
 const fetchReports = async (page = 1) => {
   reportsLoading.value = true;
   try {
-    const response = await teacherStore.fetchReports(page);
-    reports.value = response.data || [];
-    reportsPagination.value = {
-      currentPage: response.meta?.current_page || 1,
-      perPage: response.meta?.per_page || 10,
-      total: response.meta?.total || 0
-    };
+    await teacherStore.fetchReports(page);
   } catch (error) {
     console.error('Error fetching reports:', error);
   } finally {
@@ -217,48 +197,31 @@ const fetchReports = async (page = 1) => {
   }
 };
 
-const getUserReportCount = (userId) => {
-  return reports.value.filter(r => r.student_id === userId).length;
-};
-
-const userInitials = (user) => {
-  return ((user.first_name || '')[0] + (user.last_name || '')[0]).toUpperCase();
-};
-
-const formatStatus = (status) => {
-  const statusMap = { pending: 'Pending', resolved: 'Resolved', rejected: 'Rejected' };
-  return statusMap[status?.toLowerCase()] || status;
-};
-
+const getUserReportCount = (userId) => reports.value.filter(r => r.student_id === userId).length;
+const userInitials = (user) => ((user.first_name || '')[0] + (user.last_name || '')[0]).toUpperCase();
+const formatStatus = (status) => ({ pending: 'Pending', resolved: 'Resolved', rejected: 'Rejected' }[status?.toLowerCase()] || status);
 const formatDate = (date) => {
   if (!date) return '';
-  return new Date(date).toLocaleDateString('en-US', { 
-    year: 'numeric', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
+  return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
 const resolveReport = async (report) => {
   try {
     await teacherStore.resolveReport(report.id);
-    await fetchData();
+    await teacherStore.fetchDashboard();
   } catch (error) {
     console.error('Error resolving report:', error);
   }
 };
 
-const openRefusalModal = (report) => {
-  selectedReport.value = report;
-  showRefusalModal.value = true;
-};
+const openRefusalModal = (report) => { selectedReport.value = report; showRefusalModal.value = true; };
 
 const handleRejection = async (reason) => {
   if (!selectedReport.value) return;
-  
   try {
     await teacherStore.rejectReport(selectedReport.value.id, reason);
     showRefusalModal.value = false;
-    await fetchData();
+    await teacherStore.fetchDashboard();
   } catch (error) {
     console.error('Error rejecting report:', error);
   }
