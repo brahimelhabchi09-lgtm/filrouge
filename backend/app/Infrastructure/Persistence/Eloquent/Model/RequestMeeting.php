@@ -17,6 +17,7 @@ class RequestMeeting extends Model
         'notes',
         'meeting_link',
         'status',
+        'rejection_reason',
     ];
 
     protected $casts = [

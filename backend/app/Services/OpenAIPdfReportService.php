@@ -23,293 +23,288 @@ class OpenAIPdfReportService
             $requestMeeting->load([
                 'bde',
                 'generatedReport.reports.student',
-                'generatedReport.reports.category'
+                'generatedReport.reports.category',
             ]);
 
-            $content = $this->generateReportContent($meeting, $requestMeeting);
-            $pdfContent = $this->generateHtmlForPdf($meeting, $requestMeeting, $content);
-            
-            $filename = 'meeting-reports/meeting-' . $meeting->id . '-' . Str::random(8) . '.html';
-            
-            if (Storage::disk('public')->put($filename, $pdfContent)) {
-                return $filename;
-            }
+            $aiContent = $this->generateAiContent($meeting, $requestMeeting);
+            $html      = $this->buildHtml($meeting, $requestMeeting, $aiContent);
 
-            return null;
+            $filename = 'meeting-reports/meeting-' . $meeting->id . '-' . Str::random(8) . '.html';
+
+            Storage::disk('public')->put($filename, $html);
+
+            return $filename;
         } catch (\Exception $e) {
-            \Log::error('OpenAI PDF generation failed: ' . $e->getMessage());
-            return $this->generateFallbackReport($meeting, $requestMeeting);
+            \Log::error('PDF generation failed: ' . $e->getMessage());
+            return null;
         }
     }
 
-    private function generateReportContent(Meeting $meeting, RequestMeeting $requestMeeting): string
+    private function generateAiContent(Meeting $meeting, RequestMeeting $requestMeeting): string
     {
-        if (empty($this->apiKey)) {
-            return $this->getDefaultReportContent($meeting, $requestMeeting);
+        if (empty($this->apiKey) || $this->apiKey === 'your_openai_api_key_here') {
+            return $this->fallbackContent($meeting, $requestMeeting);
         }
 
         try {
             $prompt = $this->buildPrompt($meeting, $requestMeeting);
-            
+
             $ch = curl_init($this->apiUrl);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_POST => true,
-                CURLOPT_HTTPHEADER => [
+                CURLOPT_POST           => true,
+                CURLOPT_TIMEOUT        => 60,
+                CURLOPT_HTTPHEADER     => [
                     'Content-Type: application/json',
-                    'Authorization: Bearer ' . $this->apiKey
+                    'Authorization: Bearer ' . $this->apiKey,
                 ],
                 CURLOPT_POSTFIELDS => json_encode([
-                    'model' => 'gpt-4',
-                    'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => 'You are a professional report writer. Generate a detailed, well-structured meeting report in plain text format.'
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => $prompt
-                        ]
+                    'model'       => 'gpt-4o-mini',
+                    'messages'    => [
+                        ['role' => 'system', 'content' => 'You are a professional report writer for a school issue management system called YOUPORTS. Write concise, structured summaries.'],
+                        ['role' => 'user',   'content' => $prompt],
                     ],
-                    'max_tokens' => 2000,
-                    'temperature' => 0.7
+                    'max_tokens'  => 1500,
+                    'temperature' => 0.5,
                 ]),
-                CURLOPT_TIMEOUT => 60
             ]);
 
             $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $code     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
 
-            if ($httpCode === 200 && $response) {
+            if ($code === 200 && $response) {
                 $data = json_decode($response, true);
-                return $data['choices'][0]['message']['content'] ?? $this->getDefaultReportContent($meeting, $requestMeeting);
+                return $data['choices'][0]['message']['content'] ?? $this->fallbackContent($meeting, $requestMeeting);
             }
-
-            return $this->getDefaultReportContent($meeting, $requestMeeting);
         } catch (\Exception $e) {
-            \Log::error('OpenAI API call failed: ' . $e->getMessage());
-            return $this->getDefaultReportContent($meeting, $requestMeeting);
+            \Log::error('OpenAI call failed: ' . $e->getMessage());
         }
+
+        return $this->fallbackContent($meeting, $requestMeeting);
     }
 
     private function buildPrompt(Meeting $meeting, RequestMeeting $requestMeeting): string
     {
-        $bde = $requestMeeting->bde;
-        $generatedReport = $requestMeeting->generatedReport;
-        $reports = $generatedReport->reports ?? collect();
+        $gr      = $requestMeeting->generatedReport;
+        $reports = $gr->reports ?? collect();
+        $bde     = $requestMeeting->bde;
 
-        $reportsList = '';
-        foreach ($reports as $index => $report) {
-            $reportsList .= "Report " . ($index + 1) . ":\n";
-            $reportsList .= "- Category: " . ($report->category->name ?? 'Unknown') . "\n";
-            $reportsList .= "- Student: " . ($report->student->first_name ?? '') . " " . ($report->student->last_name ?? '') . "\n";
-            $reportsList .= "- Date: " . ($report->created_at?->format('Y-m-d H:i') ?? 'N/A') . "\n";
-            $reportsList .= "- Message: " . ($report->message ?? 'No message') . "\n\n";
-        }
+        $reportLines = $reports->map(function ($r, $i) {
+            return sprintf(
+                "Report %d: Category=%s | Student=%s %s | Description=%s",
+                $i + 1,
+                $r->category->name ?? 'Unknown',
+                $r->student->first_name ?? '',
+                $r->student->last_name ?? '',
+                $r->description ?? 'N/A'
+            );
+        })->implode("\n");
 
-        return "Generate a professional meeting resume report for YOUPORTS system with the following details:
+        return "Generate a professional meeting summary report for YOUPORTS school issue management system.
 
-MEETING INFORMATION:
-- Title: " . ($meeting->title ?? 'N/A') . "
-- Date: " . ($meeting->date?->format('l, F j, Y g:i A') ?? 'N/A') . "
-- Google Meet Link: " . ($meeting->link ?? 'N/A') . "
+MEETING: {$meeting->title}
+DATE: {$meeting->date?->format('l, F j, Y g:i A')}
+GOOGLE MEET: {$meeting->link}
 
-BDE INFORMATION:
-- Name: " . ($bde ? $bde->first_name . ' ' . $bde->last_name : 'N/A') . "
-- Email: " . ($bde->email ?? 'N/A') . "
+BDE CONTACT: {$bde?->first_name} {$bde?->last_name} ({$bde?->email})
 
-PROBLEM SUMMARY:
-- Total Reports: " . ($generatedReport->reports_count ?? 0) . "
-- Priority: " . strtoupper($generatedReport->priority ?? 'N/A') . "
-- Status: " . strtoupper($generatedReport->status ?? 'N/A') . "
-- Description: " . ($generatedReport->message ?? 'No description') . "
+ISSUE SUMMARY:
+- Total reports grouped: {$gr->reports_count}
+- Priority: {$gr->priority}
+- Description: {$gr->message}
 
 INDIVIDUAL REPORTS:
-" . ($reportsList ?: 'No individual reports available.') . "
+{$reportLines}
 
-Please generate a well-structured, professional report that summarizes this meeting request. Include key findings, patterns identified, and recommendations if applicable. Format it clearly with sections.";
+Write a structured summary with: Executive Summary, Key Issues Identified, Affected Students, Priority Assessment, and Recommended Actions. Be concise and professional.";
     }
 
-    private function getDefaultReportContent(Meeting $meeting, RequestMeeting $requestMeeting): string
+    private function fallbackContent(Meeting $meeting, RequestMeeting $requestMeeting): string
     {
-        $bde = $requestMeeting->bde;
-        $generatedReport = $requestMeeting->generatedReport;
-        
-        $content = "================================================================================\n";
-        $content .= "                    MEETING RESUME - YOUPORTS\n";
-        $content .= "================================================================================\n\n";
-        
-        $content .= "TITLE: " . ($meeting->title ?? 'N/A') . "\n";
-        $content .= "DATE: " . ($meeting->date?->format('l, F j, Y g:i A') ?? 'N/A') . "\n";
-        $content .= "MEETING LINK: " . ($meeting->link ?? 'N/A') . "\n\n";
-        
-        $content .= "--------------------------------------------------------------------------------\n";
-        $content .= "BDE CONTACT\n";
-        $content .= "--------------------------------------------------------------------------------\n";
-        $content .= "Name: " . ($bde ? $bde->first_name . ' ' . $bde->last_name : 'N/A') . "\n";
-        $content .= "Email: " . ($bde->email ?? 'N/A') . "\n\n";
-        
-        $content .= "--------------------------------------------------------------------------------\n";
-        $content .= "PROBLEM SUMMARY\n";
-        $content .= "--------------------------------------------------------------------------------\n";
-        $content .= "Total Reports: " . ($generatedReport->reports_count ?? 0) . "\n";
-        $content .= "Priority: " . strtoupper($generatedReport->priority ?? 'N/A') . "\n";
-        $content .= "Description: " . ($generatedReport->message ?? 'No description available') . "\n\n";
-        
-        $content .= "--------------------------------------------------------------------------------\n";
-        $content .= "                                    Auto-generated by YOUPORTS\n";
-        $content .= "================================================================================\n";
-        
-        return $content;
+        $gr      = $requestMeeting->generatedReport;
+        $reports = $gr->reports ?? collect();
+        $bde     = $requestMeeting->bde;
+
+        $lines = "EXECUTIVE SUMMARY\n";
+        $lines .= "This meeting was requested by BDE member {$bde?->first_name} {$bde?->last_name} to address {$gr->reports_count} grouped report(s) with priority {$gr->priority}.\n\n";
+        $lines .= "ISSUE DESCRIPTION\n{$gr->message}\n\n";
+        $lines .= "INDIVIDUAL REPORTS\n";
+
+        foreach ($reports as $i => $r) {
+            $lines .= ($i + 1) . ". [{$r->category?->name}] {$r->student?->first_name} {$r->student?->last_name}: {$r->description}\n";
+        }
+
+        $lines .= "\nRECOMMENDED ACTIONS\nReview the reports listed above during the scheduled meeting and coordinate with the relevant departments to resolve the identified issues.";
+
+        return $lines;
     }
 
-    private function generateHtmlForPdf(Meeting $meeting, RequestMeeting $requestMeeting, string $aiContent): string
+    private function buildHtml(Meeting $meeting, RequestMeeting $requestMeeting, string $aiContent): string
     {
-        $bde = $requestMeeting->bde;
-        $generatedReport = $requestMeeting->generatedReport;
-        $reports = $generatedReport->reports ?? collect();
-        $priorityColor = $this->getPriorityColor($generatedReport->priority ?? 'P2');
+        $gr      = $requestMeeting->generatedReport;
+        $reports = $gr->reports ?? collect();
+        $bde     = $requestMeeting->bde;
 
-        $reportsHtml = '';
-        foreach ($reports as $index => $report) {
-            $reportsHtml .= '
-            <tr>
-                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">' . ($report->category->name ?? 'Unknown') . '</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">' . ($report->student->first_name ?? '') . ' ' . ($report->student->last_name ?? '') . '</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">' . ($report->created_at?->format('M j, Y') ?? 'N/A') . '</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">' . nl2br(htmlspecialchars($report->message ?? 'No message')) . '</td>
+        $priorityColors = ['P0' => '#f43f5e', 'P1' => '#f59e0b', 'P2' => '#06b6d4', 'P3' => '#7c3aed'];
+        $pColor = $priorityColors[strtoupper($gr->priority ?? 'P2')] ?? '#7c3aed';
+
+        $rows = '';
+        foreach ($reports as $r) {
+            $rows .= '<tr>
+                <td>' . e($r->category?->name ?? 'N/A') . '</td>
+                <td>' . e(($r->student?->first_name ?? '') . ' ' . ($r->student?->last_name ?? '')) . '</td>
+                <td>' . e($r->created_at?->format('M j, Y') ?? 'N/A') . '</td>
+                <td>' . nl2br(e($r->description ?? 'No description')) . '</td>
             </tr>';
         }
 
+        $noRows = $rows ? '' : '<tr><td colspan="4" style="text-align:center;color:#6b7280;padding:2rem;">No individual reports</td></tr>';
+
         return '<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Meeting Report - ' . htmlspecialchars($meeting->title ?? 'YOUPORTS Meeting') . '</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; line-height: 1.6; color: #1e293b; padding: 0; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .header { background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%); color: white; padding: 40px 30px; text-align: center; }
-        .header h1 { font-size: 28px; margin-bottom: 8px; font-weight: 700; }
-        .header p { font-size: 14px; opacity: 0.95; }
-        .content { padding: 30px; background: #f8fafc; }
-        .section { margin-bottom: 30px; background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .section-title { font-size: 13px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #6366f1; }
-        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-        .info-box { background: #f1f5f9; padding: 12px 15px; border-radius: 8px; }
-        .info-box label { font-size: 9px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px; }
-        .info-box p { font-size: 12px; color: #1e293b; }
-        .priority { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 700; color: white; }
-        .description-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 0 8px 8px 0; margin-top: 10px; }
-        .description-box p { color: #92400e; }
-        .ai-content { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 8px; white-space: pre-wrap; font-size: 11px; line-height: 1.8; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th { background: #1e293b; color: white; padding: 12px; text-align: left; font-size: 10px; text-transform: uppercase; }
-        td { padding: 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; font-size: 10px; }
-        .footer { text-align: center; padding: 25px; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; margin-top: 30px; }
-        @media print { body { padding: 0; } .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .section { box-shadow: none; } }
-        @page { margin: 15mm; }
-    </style>
+<meta charset="UTF-8">
+<title>Meeting Report — ' . e($meeting->title) . '</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 12px; color: #111; background: #fff; }
+  .page { max-width: 900px; margin: 0 auto; padding: 0; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%); color: white; padding: 40px 36px; position: relative; overflow: hidden; }
+  .header::before { content: ""; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(124,58,237,0.4) 0%, transparent 70%); border-radius: 50%; }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .brand { font-size: 11px; font-weight: 700; letter-spacing: 0.2em; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-bottom: 12px; }
+  .header h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+  .header .subtitle { font-size: 13px; color: rgba(255,255,255,0.6); }
+  .priority-chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
+  .priority-dot { width: 8px; height: 8px; border-radius: 50%; background: ' . $pColor . '; box-shadow: 0 0 8px ' . $pColor . '; }
+
+  /* Meta bar */
+  .meta-bar { background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 16px 36px; display: flex; gap: 32px; }
+  .meta-item label { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; margin-bottom: 3px; }
+  .meta-item p { font-size: 12px; font-weight: 600; color: #111; }
+  .meta-item a { color: #7c3aed; text-decoration: none; }
+
+  /* Content */
+  .content { padding: 32px 36px; }
+  .section { margin-bottom: 28px; }
+  .section-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #7c3aed; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #ede9fe; }
+
+  /* Info grid */
+  .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .info-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 14px; }
+  .info-box label { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 4px; }
+  .info-box p { font-size: 12px; color: #111; font-weight: 500; }
+
+  /* AI content */
+  .ai-box { background: #fafafa; border: 1px solid #e5e7eb; border-left: 3px solid #7c3aed; border-radius: 0 8px 8px 0; padding: 16px 18px; white-space: pre-wrap; line-height: 1.8; font-size: 12px; color: #374151; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  thead tr { background: #111; color: white; }
+  th { padding: 10px 12px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; vertical-align: top; color: #374151; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  /* Footer */
+  .footer { margin-top: 32px; padding: 20px 36px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; color: #9ca3af; font-size: 10px; }
+  .footer strong { color: #374151; }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { margin: 10mm; }
+  }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>YOUPORTS Meeting Report</h1>
-            <p>' . htmlspecialchars($meeting->title ?? 'Meeting Request') . '</p>
-        </div>
-        
-        <div class="content">
-            <div class="section">
-                <div class="section-title">Meeting Information</div>
-                <div class="info-grid">
-                    <div class="info-box">
-                        <label>Meeting ID</label>
-                        <p>#' . $meeting->id . '</p>
-                    </div>
-                    <div class="info-box">
-                        <label>Date & Time</label>
-                        <p>' . ($meeting->date?->format('l, F j, Y g:i A') ?? 'N/A') . '</p>
-                    </div>
-                    <div class="info-box">
-                        <label>Meet Link</label>
-                        <p><a href="' . htmlspecialchars($meeting->link ?? '#') . '" style="color: #6366f1;">' . htmlspecialchars($meeting->link ?? 'N/A') . '</a></p>
-                    </div>
-                    <div class="info-box">
-                        <label>Reports Count</label>
-                        <p><span class="priority" style="background: ' . $priorityColor . ';">' . strtoupper($generatedReport->priority ?? 'N/A') . '</span> - ' . ($generatedReport->reports_count ?? 0) . ' reports</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">BDE Contact</div>
-                <div class="info-grid">
-                    <div class="info-box">
-                        <label>Name</label>
-                        <p>' . ($bde ? htmlspecialchars($bde->first_name . ' ' . $bde->last_name) : 'N/A') . '</p>
-                    </div>
-                    <div class="info-box">
-                        <label>Email</label>
-                        <p>' . htmlspecialchars($bde->email ?? 'N/A') . '</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">Problem Summary</div>
-                <div class="info-box" style="margin-bottom: 15px;">
-                    <label>AI-Generated Analysis</label>
-                </div>
-                <div class="ai-content">' . nl2br(htmlspecialchars($aiContent)) . '</div>
-                
-                <div class="description-box" style="margin-top: 20px;">
-                    <label style="font-size: 10px; font-weight: 600; color: #92400e; text-transform: uppercase;">Original Description</label>
-                    <p style="margin-top: 5px;">' . nl2br(htmlspecialchars($generatedReport->message ?? 'No description provided')) . '</p>
-                </div>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">Individual Reports (' . $reports->count() . ')</div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width: 18%;">Category</th>
-                            <th style="width: 22%;">Student</th>
-                            <th style="width: 12%;">Date</th>
-                            <th style="width: 48%;">Message</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ' . ($reportsHtml ?: '<tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 30px;">No individual reports available</td></tr>') . '
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <p><strong>YOUPORTS</strong> - Automated Report Generation System</p>
-            <p>Generated: ' . now()->format('F j, Y g:i A') . '</p>
-            <p style="margin-top: 10px; font-size: 9px;">Print this page as PDF: File → Print → Save as PDF</p>
-        </div>
+<div class="page">
+
+  <div class="header">
+    <div class="brand">YouPorts — Meeting Report</div>
+    <div class="header-top">
+      <div>
+        <h1>' . e($meeting->title) . '</h1>
+        <p class="subtitle">Meeting #' . $meeting->id . ' &nbsp;·&nbsp; Generated ' . now()->format('F j, Y') . '</p>
+      </div>
+      <div class="priority-chip">
+        <span class="priority-dot"></span>
+        ' . strtoupper($gr->priority ?? 'P2') . ' Priority
+      </div>
     </div>
+  </div>
+
+  <div class="meta-bar">
+    <div class="meta-item">
+      <label>Date &amp; Time</label>
+      <p>' . e($meeting->date?->format('l, F j, Y · g:i A') ?? 'N/A') . '</p>
+    </div>
+    <div class="meta-item">
+      <label>Google Meet</label>
+      <p><a href="' . e($meeting->link ?? '#') . '">' . e($meeting->link ?? 'N/A') . '</a></p>
+    </div>
+    <div class="meta-item">
+      <label>BDE Contact</label>
+      <p>' . e(($bde?->first_name ?? '') . ' ' . ($bde?->last_name ?? '')) . '</p>
+    </div>
+    <div class="meta-item">
+      <label>Reports Grouped</label>
+      <p>' . ($gr->reports_count ?? 0) . ' report(s)</p>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <div class="section">
+      <div class="section-title">Meeting Details</div>
+      <div class="info-grid">
+        <div class="info-box">
+          <label>BDE Email</label>
+          <p>' . e($bde?->email ?? 'N/A') . '</p>
+        </div>
+        <div class="info-box">
+          <label>Proposed Date (BDE)</label>
+          <p>' . e($requestMeeting->meeting_date?->format('M j, Y g:i A') ?? 'N/A') . '</p>
+        </div>
+        <div class="info-box">
+          <label>BDE Notes</label>
+          <p>' . e($requestMeeting->notes ?? 'No notes provided') . '</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">AI-Generated Summary</div>
+      <div class="ai-box">' . e($aiContent) . '</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Individual Reports (' . $reports->count() . ')</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:16%">Category</th>
+            <th style="width:20%">Student</th>
+            <th style="width:12%">Date</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>' . $rows . $noRows . '</tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <span><strong>YOUPORTS</strong> — Campus Issue Management System</span>
+    <span>Auto-generated · ' . now()->format('F j, Y g:i A') . ' · <em>Print → Save as PDF</em></span>
+  </div>
+
+</div>
 </body>
 </html>';
-    }
-
-    private function generateFallbackReport(Meeting $meeting, RequestMeeting $requestMeeting): ?string
-    {
-        return $this->generateHtmlForPdf($meeting, $requestMeeting, $this->getDefaultReportContent($meeting, $requestMeeting));
-    }
-
-    private function getPriorityColor(string $priority): string
-    {
-        return match(strtoupper($priority)) {
-            'P0' => '#ef4444',
-            'P1' => '#f59e0b',
-            'P2' => '#3b82f6',
-            default => '#6366f1'
-        };
     }
 }

@@ -116,25 +116,53 @@
       </div>
       <div v-if="loading" class="loading-state"><div class="spinner"></div><p>Loading…</p></div>
       <div v-else-if="requestMeetings.length === 0" class="empty-state"><CalendarOff :size="36" /><p>No pending meeting requests.</p></div>
-      <div v-else class="reports-grid">
-        <report-card
-          v-for="request in requestMeetings"
-          :key="request.id"
-          :title="request.generated_report?.message?.substring(0, 60) || 'Meeting Request'"
-          category="Meeting Request"
-          :priority="request.generated_report?.priority || 'P1'"
-          status="Meeting Requested"
-          :description="request.notes || 'No additional notes'"
-          affected="Requested by BDE"
-        >
-          <div class="meeting-meta">
-            <span class="meeting-date-chip"><Calendar :size="12" /> {{ formatDate(request.meeting_date) }}</span>
+      <div v-else class="requests-list">
+        <div v-for="request in requestMeetings" :key="request.id" class="request-card glass-card">
+          <div class="request-header">
+            <div class="request-left">
+              <span class="request-badge">Meeting Request #{{ request.id }}</span>
+              <h3 class="request-title">{{ request.generated_report?.message?.substring(0, 80) || 'Meeting Request' }}</h3>
+            </div>
+            <div class="request-priority">
+              <span class="priority-chip" :class="`pchip-${(request.generated_report?.priority || 'P2').toUpperCase()}`">
+                {{ request.generated_report?.priority || 'P2' }}
+              </span>
+            </div>
           </div>
-          <div class="action-btns">
-            <button class="btn btn-success btn-sm" @click="openScheduleModal(request)">Schedule</button>
-            <button class="btn btn-danger btn-sm" @click="openRefusalModal(request)">Refuse</button>
+
+          <div class="request-meta-grid">
+            <div class="meta-box">
+              <span class="meta-label">BDE Member</span>
+              <span class="meta-value">{{ request.bde?.first_name }} {{ request.bde?.last_name }}</span>
+            </div>
+            <div class="meta-box">
+              <span class="meta-label">Proposed Date</span>
+              <span class="meta-value">{{ formatDateTime(request.meeting_date) }}</span>
+            </div>
+            <div class="meta-box">
+              <span class="meta-label">Reports Grouped</span>
+              <span class="meta-value">{{ request.generated_report?.reports_count || 1 }} report(s)</span>
+            </div>
+            <div class="meta-box">
+              <span class="meta-label">Requested On</span>
+              <span class="meta-value">{{ formatDate(request.created_at) }}</span>
+            </div>
           </div>
-        </report-card>
+
+          <div v-if="request.notes" class="request-notes">
+            <span class="meta-label">BDE Notes</span>
+            <p>{{ request.notes }}</p>
+          </div>
+
+          <div class="request-actions">
+            <button class="btn btn-success btn-sm" @click="openScheduleModal(request)">
+              <CheckCircle :size="14" /> Accept & Schedule
+            </button>
+            <button class="btn btn-danger btn-sm" @click="openRefusalModal(request)">
+              <XCircle :size="14" /> Reject
+            </button>
+          </div>
+        </div>
       </div>
       <pagination
         v-if="requestPagination.total > requestPagination.perPage"
@@ -153,10 +181,15 @@
         <div v-for="meeting in meetings" :key="meeting.id" class="meeting-item glass-card">
           <div class="meeting-info">
             <h3>{{ meeting.title }}</h3>
-            <p>{{ formatDate(meeting.date) }}</p>
+            <p><Calendar :size="12" /> {{ formatDateTime(meeting.date) }}</p>
           </div>
           <div class="meeting-right">
-            <a :href="meeting.link" target="_blank" class="join-link"><Video :size="14" /> Join</a>
+            <a v-if="meeting.pdf_path" :href="`http://localhost:3000/storage/${meeting.pdf_path}`" target="_blank" class="pdf-link">
+              <FileText :size="14" /> View PDF
+            </a>
+            <a :href="meeting.link" target="_blank" class="join-link">
+              <Video :size="14" /> Join
+            </a>
             <span class="badge-success-pill">Scheduled</span>
           </div>
         </div>
@@ -207,7 +240,7 @@ import { useAdminStore } from '../../stores/admin';
 import ReportCard from '../../components/ReportCard.vue';
 import RefusalModal from '../../components/RefusalModal.vue';
 import Pagination from '../../components/Pagination.vue';
-import { Users, FileText, Video, Clock, Edit2, CalendarOff, Calendar, UserPlus } from 'lucide-vue-next';
+import { Users, FileText, Video, Clock, Edit2, CalendarOff, Calendar, UserPlus, CheckCircle, XCircle } from 'lucide-vue-next';
 
 const adminStore = useAdminStore();
 const { users, reports, meetings, requestMeetings, userMeta, reportsMeta, requestMeta } = storeToRefs(adminStore);
@@ -259,6 +292,7 @@ const formatStatus = (status) => ({ pending: 'Pending', resolved: 'Resolved', re
 const userInitials = (u) => ((u.first_name || '')[0] + (u.last_name || '')[0]).toUpperCase();
 const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
 const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A';
 
 const openRefusalModal = (req) => { selectedRequest.value = req; showRefusalModal.value = true; };
 const openScheduleModal = (req) => {
@@ -392,6 +426,67 @@ th {
 }
 
 .btn-icon:hover { background: var(--surface-hover); color: var(--text-main); }
+
+/* Request meeting cards */
+.requests-list { display: flex; flex-direction: column; gap: 1rem; }
+
+.request-card {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-left: 3px solid var(--primary);
+  transition: all var(--transition-normal);
+}
+
+.request-card:hover { border-left-color: var(--accent); }
+
+.request-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.request-left { flex: 1; min-width: 0; }
+.request-badge {
+  font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--primary-light); background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.2);
+  padding: 0.15rem 0.5rem; border-radius: var(--radius-full); display: inline-block; margin-bottom: 0.375rem;
+}
+.request-title { font-size: 0.9375rem; font-weight: 600; color: var(--text-main); line-height: 1.4; }
+
+.priority-chip {
+  font-size: 0.625rem; font-weight: 800; letter-spacing: 0.1em;
+  padding: 0.25rem 0.625rem; border-radius: var(--radius-full); border: 1px solid transparent; flex-shrink: 0;
+}
+.pchip-P0 { background: var(--p0-bg); color: var(--p0); border-color: rgba(244,63,94,0.3); }
+.pchip-P1 { background: var(--p1-bg); color: var(--p1); border-color: rgba(245,158,11,0.3); }
+.pchip-P2 { background: var(--p2-bg); color: var(--p2); border-color: rgba(6,182,212,0.3); }
+.pchip-P3 { background: var(--p3-bg); color: var(--p3); border-color: rgba(124,58,237,0.3); }
+
+.request-meta-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;
+}
+
+.meta-box {
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+  border-radius: var(--radius-md); padding: 0.625rem 0.75rem;
+}
+
+.meta-label { display: block; font-size: 0.5625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.25rem; }
+.meta-value { font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); }
+
+.request-notes {
+  background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.15);
+  border-radius: var(--radius-md); padding: 0.75rem 1rem;
+}
+.request-notes p { font-size: 0.8125rem; color: var(--text-secondary); margin-top: 0.25rem; line-height: 1.5; }
+
+.request-actions { display: flex; gap: 0.5rem; }
+
+.pdf-link {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  color: var(--accent); font-size: 0.8125rem; font-weight: 600;
+  padding: 0.35rem 0.75rem; border: 1px solid rgba(6,182,212,0.3);
+  border-radius: var(--radius-md); transition: all var(--transition-fast);
+  background: rgba(6,182,212,0.05);
+}
+.pdf-link:hover { background: rgba(6,182,212,0.12); border-color: var(--accent); }
 
 /* Meeting items */
 .meetings-list { display: flex; flex-direction: column; gap: 0.75rem; }
