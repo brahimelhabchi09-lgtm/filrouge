@@ -1,0 +1,133 @@
+@startuml YouPorts_Use_Case
+
+skinparam backgroundColor #000000
+skinparam actorBackgroundColor #0a0a0a
+skinparam actorBorderColor #7c3aed
+skinparam actorFontColor #ffffff
+skinparam usecaseBackgroundColor #0a0a0a
+skinparam usecaseBorderColor #7c3aed
+skinparam usecaseFontColor #e2e8f0
+skinparam arrowColor #a78bfa
+skinparam packageBackgroundColor #050505
+skinparam packageBorderColor #7c3aed
+skinparam packageFontColor #a78bfa
+skinparam shadowing false
+skinparam roundcorner 10
+
+title <color:#a78bfa>YouPorts</color> — Use Case Diagram
+
+' ─────────────────────────────────────────
+'  ACTORS
+' ─────────────────────────────────────────
+
+actor Student    as S #7c3aed
+actor Teacher    as T #10b981
+actor BDE        as B #06b6d4
+actor Admin      as A #f59e0b
+actor "OpenAI\nAPI" as AI #4b5563
+
+' ─────────────────────────────────────────
+'  AUTHENTICATION
+' ─────────────────────────────────────────
+
+package "Authentication" {
+    usecase "Login"  as UC_LOGIN
+    usecase "Logout" as UC_LOGOUT
+}
+
+S --> UC_LOGIN
+T --> UC_LOGIN
+B --> UC_LOGIN
+A --> UC_LOGIN
+S --> UC_LOGOUT
+T --> UC_LOGOUT
+B --> UC_LOGOUT
+A --> UC_LOGOUT
+
+' ─────────────────────────────────────────
+'  STUDENT
+' ─────────────────────────────────────────
+
+package "Student" {
+    usecase "View Dashboard\n(stats)"           as UC_S_DASH
+    usecase "View My Reports"                   as UC_S_LIST
+    usecase "Submit Report\n(title, description,\ncategory)" as UC_S_CREATE
+    usecase "Auto-group report\nby category"    as UC_S_GROUP
+    usecase "Auto-escalate\npriority\nP3→P2→P1→P0" as UC_S_PRIO
+}
+
+S --> UC_S_DASH
+S --> UC_S_LIST
+S --> UC_S_CREATE
+UC_S_CREATE ..> UC_S_GROUP : <<include>>
+UC_S_GROUP  ..> UC_S_PRIO  : <<include>>
+
+' ─────────────────────────────────────────
+'  TEACHER
+' ─────────────────────────────────────────
+
+package "Teacher\n(Pedagogy categories)" {
+    usecase "View Dashboard\n(pending reports,\nrejection history)" as UC_T_DASH
+    usecase "View All Reports"                  as UC_T_LIST
+    usecase "Resolve Report"                    as UC_T_RESOLVE
+    usecase "Reject Report\n(with reason)"      as UC_T_REJECT
+    usecase "View Student List"                 as UC_T_USERS
+}
+
+T --> UC_T_DASH
+T --> UC_T_LIST
+T --> UC_T_RESOLVE
+T --> UC_T_REJECT
+T --> UC_T_USERS
+
+' ─────────────────────────────────────────
+'  BDE
+' ─────────────────────────────────────────
+
+package "BDE\n(Infrastructure categories)" {
+    usecase "View Dashboard\n(pending reports,\nmy requests)"       as UC_B_DASH
+    usecase "View All Reports"                  as UC_B_LIST
+    usecase "Request Meeting\n(propose date,\nnotes, link)"         as UC_B_APPROVE
+    usecase "Deny Report\n(with reason)"        as UC_B_DENY
+    usecase "View Scheduled\nMeetings"          as UC_B_MEETINGS
+}
+
+B --> UC_B_DASH
+B --> UC_B_LIST
+B --> UC_B_APPROVE
+B --> UC_B_DENY
+B --> UC_B_MEETINGS
+
+' ─────────────────────────────────────────
+'  ADMIN
+' ─────────────────────────────────────────
+
+package "Admin" {
+    usecase "View Dashboard\n(users, stats)"    as UC_A_DASH
+    usecase "View All Reports"                  as UC_A_REPORTS
+    usecase "Manage Users\n(create, list)"      as UC_A_USERS
+    usecase "Manage Categories\n(CRUD)"         as UC_A_CATS
+    usecase "View Meeting\nRequests"            as UC_A_REQS
+    usecase "Accept Request\n& Schedule Meeting\n(title, date, link)" as UC_A_ACCEPT
+    usecase "Reject Meeting\nRequest\n(with reason)"                  as UC_A_REJECT
+    usecase "Auto-generate\nJitsi Meet link"    as UC_A_JITSI
+    usecase "Generate PDF\nReport"              as UC_A_PDF
+    usecase "Send Email\nNotification to BDE"   as UC_A_EMAIL
+    usecase "View Scheduled\nMeetings"          as UC_A_MEETINGS
+}
+
+A --> UC_A_DASH
+A --> UC_A_REPORTS
+A --> UC_A_USERS
+A --> UC_A_CATS
+A --> UC_A_REQS
+A --> UC_A_ACCEPT
+A --> UC_A_REJECT
+A --> UC_A_MEETINGS
+
+UC_A_ACCEPT ..> UC_A_JITSI : <<include>>
+UC_A_ACCEPT ..> UC_A_PDF   : <<include>>
+UC_A_ACCEPT ..> UC_A_EMAIL : <<include>>
+UC_A_PDF    ..> AI         : <<uses>>
+
+@enduml

@@ -1,95 +1,104 @@
+# YouPorts — Entity Relationship Diagram
+
 ```mermaid
+erDiagram
+    direction TB
 
-	erDiagram
-		direction TB
-		USER {
-			int id  ""  
-			string first_name  ""  
-			string last_name  ""  
-			string email  ""  
-			string password  ""  
-			date created_at  ""  
-		}
+    USERS {
+        int     id              PK
+        string  first_name
+        string  last_name
+        string  email           UK
+        string  password
+        enum    role            "ADMIN | STUDENT | TEACHER | BDE"
+        string  remember_token
+        datetime created_at
+        datetime updated_at
+    }
 
-		STUDENT {
-			int user_id  ""  
-			string role  ""  
-		}
+    CATEGORIES {
+        int     id              PK
+        string  name            UK
+        string  description
+        datetime created_at
+        datetime updated_at
+    }
 
-		ADMIN {
-			int user_id  ""  
-			string role  ""  
-		}
+    REPORTS {
+        int     id              PK
+        string  title
+        text    description
+        int     student_id      FK
+        int     category_id     FK
+        int     generated_report_id FK
+        enum    status          "pending | resolved | rejected"
+        datetime created_at
+        datetime updated_at
+    }
 
-		TEACHER {
-			int user_id  ""  
-			string role  ""  
-		}
+    GENERATED_REPORTS {
+        int     id              PK
+        text    message
+        enum    priority        "P0 | P1 | P2 | P3"
+        enum    status          "pending | resolved | rejected | escalated"
+        int     reports_count
+        text    bde_reason
+        datetime created_at
+        datetime updated_at
+    }
 
-		BDE {
-			int user_id  ""  
-			string role  ""  
-		}
+    REJECTED_TEACHER_REASONS {
+        int     id              PK
+        text    message
+        int     teacher_id      FK
+        int     generated_report_id FK
+        datetime created_at
+        datetime updated_at
+    }
 
-		CATEGORY {
-			int id  ""  
-			string name  ""  
-			string description  ""  
-			date created_at  ""  
-		}
+    REQUEST_MEETINGS {
+        int     id              PK
+        int     bde_id          FK
+        int     generated_report_id FK
+        datetime meeting_date
+        text    notes
+        string  meeting_link
+        enum    status          "pending | approved | rejected"
+        text    rejection_reason
+        datetime created_at
+        datetime updated_at
+    }
 
-		REPORT {
-			int id  ""  
-			string body  ""  
-			date created_at  ""  
-		}
+    MEETINGS {
+        int     id              PK
+        string  title
+        text    description
+        datetime date
+        string  link
+        string  pdf_path
+        int     admin_id        FK
+        int     request_meeting_id FK
+        datetime created_at
+        datetime updated_at
+    }
 
-		GENER_REPORT {
-			int id  ""  
-			date created_at  ""  
-		}
+    SESSIONS {
+        string  id              PK
+        int     user_id         FK
+        string  ip_address
+        text    user_agent
+        longtext payload
+        int     last_activity
+    }
 
-		MEETING {
-			int id  ""  
-			date created_at  ""  
-			date date_meet  ""  
-		}
-
-		MEETING_REQUEST {
-			int id  ""  
-			date created_at  ""  
-		}
-
-		REJECT_TEACHER_REASON {
-			int id  ""  
-			string message  ""  
-		}
-
-		REJECT_BDE_REASON {
-			int id  ""  
-			string message  ""  
-		}
-
-		REJECT_REQUEST_MEETING_REASON {
-			int id  ""  
-			string message  ""  
-		}
-
-		USER||--||STUDENT:"is"
-		USER||--||ADMIN:"is"
-		USER||--||TEACHER:"is"
-		USER||--||BDE:"is"
-		STUDENT||--o{REPORT:"makes"
-		CATEGORY||--o{REPORT:"has"
-		REPORT}o--||GENER_REPORT:"belongs_to"
-		ADMIN}o--||MEETING:"approves"
-		MEETING||--o{MEETING_REQUEST:"has"
-		BDE||--o{MEETING_REQUEST:"reserves"
-		MEETING_REQUEST||--||GENER_REPORT:"has"
-		TEACHER||--o{REJECT_TEACHER_REASON:"gives"
-		BDE||--o{REJECT_BDE_REASON:"gives"
-		ADMIN||--o{REJECT_REQUEST_MEETING_REASON:"gives"
-		REJECT_TEACHER_REASON||--||REPORT:"explains"
-		REJECT_BDE_REASON||--||REPORT:"explains"
-		REJECT_REQUEST_MEETING_REASON||--||REPORT:"explains"
+    USERS         ||--o{ REPORTS                  : "student submits"
+    CATEGORIES    ||--o{ REPORTS                  : "classifies"
+    GENERATED_REPORTS ||--o{ REPORTS              : "groups"
+    GENERATED_REPORTS ||--o| REQUEST_MEETINGS     : "escalated via"
+    GENERATED_REPORTS ||--o{ REJECTED_TEACHER_REASONS : "rejected by teacher"
+    USERS         ||--o{ REJECTED_TEACHER_REASONS : "teacher writes"
+    USERS         ||--o{ REQUEST_MEETINGS         : "bde creates"
+    REQUEST_MEETINGS ||--o| MEETINGS              : "results in"
+    USERS         ||--o{ MEETINGS                 : "admin schedules"
+    USERS         ||--o{ SESSIONS                 : "has session"
 ```
