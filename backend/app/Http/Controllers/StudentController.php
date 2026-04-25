@@ -68,27 +68,53 @@ class StudentController extends Controller
 
         $userId = $this->getUserId();
 
-        $generatedReport = GeneratedReport::create([
-            'message' => $validated['description'],
-            'priority' => 'P2',
-            'status' => 'pending',
-            'reports_count' => 1,
-        ]);
+        // Find an existing pending GeneratedReport for this category to group into
+        $generatedReport = GeneratedReport::whereHas('reports', function ($q) use ($validated) {
+                $q->where('category_id', $validated['category_id']);
+            })
+            ->whereIn('status', ['pending'])
+            ->first();
+
+        if ($generatedReport) {
+            // Group into existing report and escalate priority
+            $newCount = $generatedReport->reports_count + 1;
+            $generatedReport->update([
+                'reports_count' => $newCount,
+                'priority'      => $this->escalatePriority($newCount),
+            ]);
+        } else {
+            $generatedReport = GeneratedReport::create([
+                'message'       => $validated['description'],
+                'priority'      => 'P3',
+                'status'        => 'pending',
+                'reports_count' => 1,
+            ]);
+        }
 
         $report = Report::create([
-            'title' => $validated['title'],
-            'description' => $validated['description'],
-            'student_id' => $userId,
-            'category_id' => $validated['category_id'],
+            'title'               => $validated['title'],
+            'description'         => $validated['description'],
+            'student_id'          => $userId,
+            'category_id'         => $validated['category_id'],
             'generated_report_id' => $generatedReport->id,
-            'status' => 'pending',
+            'status'              => 'pending',
         ]);
 
         $report->load(['category', 'generatedReport']);
 
         return response()->json([
             'message' => 'Report submitted successfully!',
-            'report' => $report,
+            'report'  => $report,
         ], 201);
+    }
+
+    private function escalatePriority(int $count): string
+    {
+        return match (true) {
+            $count >= 4 => 'P0',
+            $count === 3 => 'P1',
+            $count === 2 => 'P2',
+            default      => 'P3',
+        };
     }
 }

@@ -49,21 +49,33 @@ class ReportController extends Controller
         $validated = $request->validated();
         $user = $request->user();
 
-        // MVP approach:
-        // - create a new "generated_report" grouping record per submission (no AI dedup yet)
-        // - attach it to the created report via generated_report_id
-        $generated = GeneratedReport::create([
-            'message' => $validated['description'],
-            'priority' => 'P0',
-            'status' => 'pending',
-            'reports_count' => 1,
-        ]);
+        // Group into existing pending GeneratedReport for same category, escalate priority
+        $generated = GeneratedReport::whereHas('reports', function ($q) use ($validated) {
+                $q->where('category_id', (int) $validated['category_id']);
+            })
+            ->whereIn('status', ['pending'])
+            ->first();
+
+        if ($generated) {
+            $newCount = $generated->reports_count + 1;
+            $generated->update([
+                'reports_count' => $newCount,
+                'priority'      => $this->escalatePriority($newCount),
+            ]);
+        } else {
+            $generated = GeneratedReport::create([
+                'message'       => $validated['description'],
+                'priority'      => 'P3',
+                'status'        => 'pending',
+                'reports_count' => 1,
+            ]);
+        }
 
         $report = Report::create([
-            'title' => $validated['title'],
-            'description' => $validated['description'],
-            'student_id' => $user->id,
-            'category_id' => (int) $validated['category_id'],
+            'title'               => $validated['title'],
+            'description'         => $validated['description'],
+            'student_id'          => $user->id,
+            'category_id'         => (int) $validated['category_id'],
             'generated_report_id' => $generated->id,
         ]);
 
@@ -72,6 +84,16 @@ class ReportController extends Controller
         return (new ReportResource($report))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    private function escalatePriority(int $count): string
+    {
+        return match (true) {
+            $count >= 4 => 'P0',
+            $count === 3 => 'P1',
+            $count === 2 => 'P2',
+            default      => 'P3',
+        };
     }
 
     /**
