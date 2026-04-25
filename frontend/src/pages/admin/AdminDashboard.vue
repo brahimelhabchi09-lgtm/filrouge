@@ -33,11 +33,11 @@
         <report-card
           v-for="report in reports"
           :key="report.id"
-          :title="report.message?.substring(0, 60) || 'Report'"
+          :title="report.title || report.description?.substring(0, 60) || 'Report'"
           :category="report.category?.name || 'General'"
-          :priority="report.priority || 'P2'"
+          :priority="report.generated_report?.priority || report.generatedReport?.priority || 'P2'"
           :status="formatStatus(report.status)"
-          :description="report.message || 'No description'"
+          :description="report.description || 'No description'"
           :affected="`Student: ${report.student?.first_name || ''} ${report.student?.last_name || ''}`"
         >
           <span class="report-date">{{ formatDate(report.created_at) }}</span>
