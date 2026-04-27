@@ -2,8 +2,8 @@
 
 namespace App\Mail;
 
-use App\Infrastructure\Persistence\Eloquent\Model\Meeting;
-use App\Infrastructure\Persistence\Eloquent\Model\RequestMeeting;
+use App\Model\Meeting;
+use App\Model\RequestMeeting;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
