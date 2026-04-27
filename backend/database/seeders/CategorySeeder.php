@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Infrastructure\Persistence\Eloquent\Model\Category;
+use App\Model\Category;
 use Illuminate\Database\Seeder;
 
 class CategorySeeder extends Seeder
