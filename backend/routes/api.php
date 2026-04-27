@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\Api\V1\ReportController;
-use App\Http\Controllers\Api\V1\GeneratedReportController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\GeneratedReportController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminCreateUserController;
 use App\Http\Controllers\MeetingController;
@@ -12,10 +12,11 @@ use App\Http\Controllers\StudentController;
 use App\Http\Controllers\BDEController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Middleware\CorsMiddleware;
 use Illuminate\Support\Facades\Route;
 
-$corsMiddleware = [\App\Http\Middleware\CorsMiddleware::class];
-$authMiddleware = ['web', \App\Http\Middleware\CorsMiddleware::class];
+$corsMiddleware = [CorsMiddleware::class];
+$authMiddleware = ['web', CorsMiddleware::class];
 
 // Public routes (no authentication required)
 Route::post('/login', [AuthController::class, 'login'])->middleware($corsMiddleware);
