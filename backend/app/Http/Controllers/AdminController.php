@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Infrastructure\Persistence\Eloquent\Model\User;
-use App\Infrastructure\Persistence\Eloquent\Model\RequestMeeting;
-use App\Infrastructure\Persistence\Eloquent\Model\Meeting;
-use App\Infrastructure\Persistence\Eloquent\Model\Report;
-use App\Infrastructure\Persistence\Eloquent\Model\GeneratedReport;
+use App\Model\User;
+use App\Model\RequestMeeting;
+use App\Model\Meeting;
+use App\Model\Report;
+use App\Model\GeneratedReport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
