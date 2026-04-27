@@ -2,84 +2,126 @@
 
 namespace App\Http\Controllers;
 
-use App\Application\Contract\CreateReportInterface;
-use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreReportRequest;
+use App\Http\Resources\ReportResource;
+use App\Model\GeneratedReport;
+use App\Model\Report;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
 
 class ReportController extends Controller
 {
-    private CreateReportInterface $createReport;
-
-    public function __construct(CreateReportInterface $createReport)
+    /**
+     * GET /api/v1/reports
+     */
+    public function index(): JsonResponse
     {
-        $this->createReport = $createReport;
-    }
+        $user = Auth::user();
 
-    public function index()
-    {
-        //
+        $query = Report::query()
+            ->with(['category', 'generatedReport'])
+            ->orderByDesc('created_at');
+
+        // RBAC: STUDENT sees their own reports only.
+        if (strtoupper((string) $user->role) === 'STUDENT') {
+            $query->where('student_id', $user->id);
+        }
+
+        $reports = $query->paginate(20);
+
+        return response()->json([
+            'data' => ReportResource::collection($reports),
+            'meta' => [
+                'current_page' => $reports->currentPage(),
+                'per_page' => $reports->perPage(),
+                'total' => $reports->total(),
+            ],
+        ]);
     }
 
     /**
-     * Show the form for creating a new resource.
+     * POST /api/v1/reports
      */
-    public function create()
+    public function store(StoreReportRequest $request): JsonResponse
     {
-        //
-    }
+        $validated = $request->validated();
+        $user = $request->user();
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        $request->validate([
-            "title" => "required",
-            "description" => "required",
-            "category_id" => "required"
+        // Group into existing pending GeneratedReport for same category, escalate priority
+        $generated = GeneratedReport::whereHas('reports', function ($q) use ($validated) {
+                $q->where('category_id', (int) $validated['category_id']);
+            })
+            ->whereIn('status', ['pending'])
+            ->first();
+
+        if ($generated) {
+            $newCount = $generated->reports_count + 1;
+            $generated->update([
+                'reports_count' => $newCount,
+                'priority'      => $this->escalatePriority($newCount),
+            ]);
+        } else {
+            $generated = GeneratedReport::create([
+                'message'       => $validated['description'],
+                'priority'      => 'P3',
+                'status'        => 'pending',
+                'reports_count' => 1,
+            ]);
+        }
+
+        $report = Report::create([
+            'title'               => $validated['title'],
+            'description'         => $validated['description'],
+            'student_id'          => $user->id,
+            'category_id'         => (int) $validated['category_id'],
+            'generated_report_id' => $generated->id,
         ]);
 
-        $data = [
-            "title" => $request->title,
-            "description" => $request->description,
-            "category_id" => $request->category_id,
-            "student_id" => auth()->user()->id
-        ];
+        $report->load(['category', 'generatedReport']);
 
-        $this->createReport->execute($data);
+        return (new ReportResource($report))
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
+    }
 
-        session()->flash('success', 'Report created successfully');
-        return redirect()->back();
+    private function escalatePriority(int $count): string
+    {
+        return match (true) {
+            $count >= 4 => 'P0',
+            $count === 3 => 'P1',
+            $count === 2 => 'P2',
+            default      => 'P3',
+        };
     }
 
     /**
-     * Display the specified resource.
+     * GET /api/v1/reports/{report}
      */
-    public function show(string $id)
+    public function show(int $report): JsonResponse
     {
-        //
-    }
+        $user = Auth::user();
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
+        $query = Report::query()
+            ->with(['category', 'generatedReport'])
+            ->where('id', $report);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        //
-    }
+        if (strtoupper((string) $user->role) === 'STUDENT') {
+            $query->where('student_id', $user->id);
+        }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //
+        $reportModel = $query->first();
+
+        if (! $reportModel) {
+            return response()->json([
+                'message' => 'Report not found.',
+            ], 404);
+        }
+
+        return (new ReportResource($reportModel))
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
     }
 }
+

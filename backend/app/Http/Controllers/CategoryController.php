@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Infrastructure\Persistence\Eloquent\Model\Category;
+use App\Model\Category;
 use Illuminate\Http\Request;
 
 class CategoryController extends Controller

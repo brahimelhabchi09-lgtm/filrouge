@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Infrastructure\Persistence\Eloquent\Model\Report;
-use App\Infrastructure\Persistence\Eloquent\Model\RejectTeacherReason;
-use App\Infrastructure\Persistence\Eloquent\Model\GeneratedReport;
-use App\Infrastructure\Persistence\Eloquent\Model\User;
+use App\Model\Report;
+use App\Model\RejectTeacherReason;
+use App\Model\GeneratedReport;
+use App\Model\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 

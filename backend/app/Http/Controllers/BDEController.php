@@ -2,14 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Infrastructure\Persistence\Eloquent\Model\GeneratedReport;
-use App\Infrastructure\Persistence\Eloquent\Model\RequestMeeting;
+use App\Model\GeneratedReport;
+use App\Model\RequestMeeting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class BDEController extends Controller
 {
-    private const BDE_CATEGORIES = [1, 3];
 
     private function getUserId()
     {
@@ -21,9 +20,6 @@ class BDEController extends Controller
         $userId = $this->getUserId();
         
         $pendingReports = GeneratedReport::where('status', 'pending')
-            ->whereHas('reports', function ($query) {
-                $query->whereIn('category_id', self::BDE_CATEGORIES);
-            })
             ->with(['reports' => function ($query) {
                 $query->with(['student', 'category']);
             }])
@@ -49,9 +45,6 @@ class BDEController extends Controller
             },
             'requestMeeting'
         ])
-        ->whereHas('reports', function ($query) {
-            $query->whereIn('category_id', self::BDE_CATEGORIES);
-        })
         ->orderByDesc('created_at')
         ->paginate(20);
 

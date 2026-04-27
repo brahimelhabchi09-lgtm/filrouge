@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Infrastructure\Persistence\Eloquent\Model\GeneratedReport;
-use App\Infrastructure\Persistence\Eloquent\Model\RequestMeeting;
+use App\Model\GeneratedReport;
+use App\Model\RequestMeeting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 

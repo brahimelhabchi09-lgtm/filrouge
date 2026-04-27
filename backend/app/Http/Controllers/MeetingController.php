@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Infrastructure\Persistence\Eloquent\Model\GeneratedReport;
-use App\Infrastructure\Persistence\Eloquent\Model\Meeting;
-use App\Infrastructure\Persistence\Eloquent\Model\RequestMeeting;
+use App\Model\GeneratedReport;
+use App\Model\Meeting;
+use App\Model\RequestMeeting;
 use App\Mail\MeetingScheduledMail;
 use App\Services\OpenAIPdfReportService;
 use Illuminate\Http\Request;
