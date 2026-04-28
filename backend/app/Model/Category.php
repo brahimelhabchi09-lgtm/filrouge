@@ -8,4 +8,7 @@ class Category extends Model
 {
     protected $table = 'categories';
     protected $fillable = ['name', 'description'];
+public function report() {
+    return $this->hasMany(Report::class);
 }
+    }
